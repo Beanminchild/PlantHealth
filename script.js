@@ -101,12 +101,13 @@ function renderPlants() {
     return;
   }
 
-  plants.forEach((plant) => {
-    const card = createPlantCard(plant, () => plants);
-    plantList.appendChild(card);
-  });
+ plants.forEach((plant) => {
+  const card = createPlantCard(plant, () => plants);
+  plantList.appendChild(card);
+  // attach personality after it's in the DOM
+  addPersonalityToCard(card, plant);
+});
 }
-
 // Open modal
 addPlantBtn.addEventListener('click', () => {
   plantModal.showModal();
@@ -361,6 +362,7 @@ function openPlantDetail(plant) {
   // build the card HTML (the wrapper background is the plant bg color)
   detailContent.innerHTML = `
     <div class="plant-detail-wrapper" style="background: ${plant.bgColor}; color: ${getForegroundFromBg(plant.bgColor)};">
+      <button type="button" class="detail-delete-btn" id="detail-delete" title="Delete plant">🗑️</button>
       <button type="button" class="detail-close-btn" id="detail-close">&times;</button>
 
       <div class="plant-detail-scroll">
@@ -410,6 +412,7 @@ function openPlantDetail(plant) {
 
   // open modal
   detailModal.showModal();
+  addPersonalityToDetail();
 
   // update function runs every second to keep time + bar in sync
   let tickId = null;
@@ -450,6 +453,19 @@ function openPlantDetail(plant) {
   tickId = setInterval(tick, 1000); // every second
   tick(); // immediate update
 
+  document.getElementById('detail-delete').addEventListener('click', () => {
+  if (tickId) clearInterval(tickId);
+
+  // Remove plant from storage
+  const plants = loadPlants();
+  const updatedPlants = plants.filter(p => p.id !== plant.id);
+  savePlants(updatedPlants);
+
+  // Close modal and refresh
+  detailModal.close();
+  renderPlants();
+}, { once: true });
+
   // close handlers (clean up interval)
   document.getElementById('detail-close').addEventListener('click', () => {
     if (tickId) clearInterval(tickId);
@@ -484,10 +500,6 @@ function openPlantDetail(plant) {
   setTimeout(() => {
     showWateringAnimation(plant.id);
   }, 140);
-
- setTimeout(() => {
-    detailModal.showModal(plant.id);
-  }, 3040);
 
 
 }, { once: true });
@@ -551,6 +563,151 @@ function createPlantCard(plant, updatePlants) {
   card.appendChild(button);
 
   return card;
+}
+
+// -----------------------------
+// Face personality helpers
+// -----------------------------
+function randomRange(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+/**
+ * addPersonalityToCard(card, plant)
+ * - card: the article element returned by createPlantCard(...)
+ * - plant: the plant object (optional, used for small choices)
+ *
+ * Adds CSS variables and small DOM nodes (sprout/sparkle), and toggles animation classes.
+ */
+function addPersonalityToCard(card, plant) {
+  try {
+    const faceShell = card.querySelector('.face-shell');
+    const faceEyes = card.querySelector('.face-eyes');
+
+    if (!faceShell) return;
+
+    // Randomize timings slightly so plants don't sync
+    const bobDur = `${Math.round(randomRange(3800, 5200))}ms`;
+    const breatheDur = `${Math.round(randomRange(3600, 5600))}ms`;
+    const blinkDelay = `${Math.round(randomRange(800, 3000))}ms`;
+    const blinkDur = `${Math.round(randomRange(2200, 4200))}ms`;
+
+    faceShell.style.setProperty('--bob-dur', bobDur);
+    faceShell.style.setProperty('--breathe-dur', breatheDur);
+    faceShell.style.setProperty('--breathe-delay', `${Math.round(randomRange(0, 1200))}ms`);
+    if (faceEyes) {
+      faceEyes.style.setProperty('--blink-delay', blinkDelay);
+      faceEyes.style.setProperty('--blink-dur', blinkDur);
+    }
+
+    // Add idle classes (breathe + bob)
+    faceShell.classList.add('idle-bob', 'idle-breathe');
+
+    // Add intermittent peek sometimes
+    if (Math.random() < 0.35) faceShell.classList.add('idle-peek');
+
+    // Add blinking to eyes
+    if (faceEyes) faceEyes.classList.add('idle-blink');
+
+    // Add a small sprout for some smiley plants (10-30% chance)
+    if (Math.random() < 0.28) {
+      const sprout = document.createElement('div');
+      sprout.className = 'face-sprout';
+      // simple SVG leaf — inline keeps it self-contained
+      sprout.innerHTML = `
+        <svg viewBox="0 0 64 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <path d="M8 36c12-18 36-28 48-28-2 14-12 34-34 40C18 54 8 36 8 36z" fill="rgba(255,255,255,0.95)"/>
+          <path d="M44 20c-6 4-10 14-20 20" stroke="rgba(0,0,0,0.08)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+      faceShell.appendChild(sprout);
+    }
+
+    // Add a small sparkle sometimes, show it briefly every few seconds
+    if (Math.random() < 0.22) {
+      const sparkle = document.createElement('div');
+      sparkle.className = 'face-sparkle';
+      sparkle.innerHTML = `
+        <svg viewBox="0 0 24 24" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <path d="M12 2l1.9 4.3L18 8l-4.1 1.7L12 14l-1.9-4.3L6 8l4.1-1.7L12 2z" fill="rgba(255,255,255,0.95)"/>
+        </svg>`;
+      faceShell.appendChild(sparkle);
+
+      // show sparkle occasionally
+      const showEveryMs = Math.round(randomRange(3600, 9000));
+      setInterval(() => {
+        faceShell.classList.add('sparkle-on');
+        setTimeout(() => faceShell.classList.remove('sparkle-on'), 550);
+      }, showEveryMs);
+    }
+
+    // subtle hover enhancement: when hovering the face, increase breathe and stop bob for a little "focus"
+    faceShell.addEventListener('mouseenter', () => {
+      faceShell.style.setProperty('--breathe-dur', '1600ms');
+      faceShell.classList.remove('idle-bob');
+    });
+    faceShell.addEventListener('mouseleave', () => {
+      faceShell.classList.add('idle-bob');
+      faceShell.style.setProperty('--breathe-dur', breatheDur);
+    });
+  } catch (e) {
+    // non-fatal if DOM shape differs
+    console.warn('personality attach failed', e);
+  }
+}
+
+/**
+ * addPersonalityToDetail(plant)
+ * Applies similar animations to the detailed modal face.
+ * Call after `openPlantDetail` has set innerHTML and after `detailModal.showModal()` so nodes exist.
+ */
+function addPersonalityToDetail() {
+  try {
+    const wrapper = document.querySelector('.plant-detail-wrapper');
+    if (!wrapper) return;
+    const faceShell = wrapper.querySelector('.face-shell');
+    const faceEyes = wrapper.querySelector('.face-eyes');
+
+    if (!faceShell) return;
+
+    // reuse the same variable logic for slightly slower more deliberate motion for detail
+    faceShell.style.setProperty('--bob-dur', `${Math.round(randomRange(4800, 7600))}ms`);
+    faceShell.style.setProperty('--breathe-dur', `${Math.round(randomRange(4200, 7400))}ms`);
+    if (faceEyes) {
+      faceEyes.style.setProperty('--blink-delay', `${Math.round(randomRange(900, 2800))}ms`);
+      faceEyes.style.setProperty('--blink-dur', `${Math.round(randomRange(2800, 4800))}ms`);
+    }
+
+    faceShell.classList.add('idle-bob', 'idle-breathe');
+    if (Math.random() < 0.5) faceShell.classList.add('idle-peek');
+    if (faceEyes) faceEyes.classList.add('idle-blink');
+
+    // add a sprout in detail if not already present and with small chance
+    if (!wrapper.querySelector('.face-sprout') && Math.random() < 0.4) {
+      const sprout = document.createElement('div');
+      sprout.className = 'face-sprout';
+      sprout.innerHTML = `
+        <svg viewBox="0 0 64 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <path d="M8 36c12-18 36-28 48-28-2 14-12 34-34 40C18 54 8 36 8 36z" fill="rgba(255,255,255,0.95)"/>
+        </svg>`;
+      faceShell.appendChild(sprout);
+    }
+
+    // occasionally trigger a sparkle in the detailed view
+    if (!wrapper.querySelector('.face-sparkle') && Math.random() < 0.5) {
+      const sparkle = document.createElement('div');
+      sparkle.className = 'face-sparkle';
+      sparkle.innerHTML = `<svg viewBox="0 0 24 24" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <path d="M12 2l1.9 4.3L18 8l-4.1 1.7L12 14l-1.9-4.3L6 8l4.1-1.7L12 2z" fill="rgba(255,255,255,0.95)"/></svg>`;
+      faceShell.appendChild(sparkle);
+
+      setInterval(() => {
+        faceShell.classList.add('sparkle-on');
+        setTimeout(() => faceShell.classList.remove('sparkle-on'), 720);
+      }, Math.round(randomRange(4200, 9800)));
+    }
+  } catch (e) {
+    console.warn('detail personality attach failed', e);
+  }
 }
 
 function getHealthBarColor(percent) {

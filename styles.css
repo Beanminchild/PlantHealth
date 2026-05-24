@@ -566,7 +566,22 @@ dialog.plant-detail-modal::backdrop {
   padding-right: 6px;      /* small space for scrollbar visual */
   box-sizing: border-box;
 }
-
+.detail-delete-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255,255,255,0.45);
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  z-index: 2;
+}
+.detail-delete-btn:hover { background: rgba(255,255,255,0.65); }
 /* Close button remains at top-right inside the wrapper */
 .detail-close-btn {
   position: absolute;
@@ -774,6 +789,90 @@ dialog.plant-detail-modal::backdrop {
 /* Ensure pointer cursor for clickable faces */
 .face-preview { cursor: pointer; }
 
+
+/* Leaf face: consistent size + eyes/mouth overlay (works like smiley) */
+.leaf-shape {
+  --face-size: var(--face-size-small, 100px); /* overridable inline */
+  width: var(--face-size);
+  height: var(--face-size);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  /* ensure no extra overflow hides decorations */
+  overflow: visible;
+}
+
+/* The SVG leaf scales to container */
+.leaf-shape svg.leaf-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Eyes and mouth inside leaf use same sizes as face-shell equivalents */
+.leaf-shape .face-eyes {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 70%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8%;
+  box-sizing: border-box;
+}
+.leaf-shape .face-eye {
+  width: calc(var(--face-size) * 0.11);
+  height: calc(var(--face-size) * 0.11);
+  background: #1f2937;
+  border-radius: 50%;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset;
+}
+
+/* mouth inside leaf — reuse same shape sizing as face-shell mouth */
+.leaf-shape .face-mouth {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  width: calc(var(--face-size) * 0.44);
+  height: calc(var(--face-size) * 0.12);
+  border-radius: 0 0 50px 50px;
+  border-bottom: calc(var(--face-size) * 0.05) solid #1f2937;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* Ensure mood rules apply to leaf face mouths too */
+.leaf-shape.mood-happy .face-mouth { border-color: #134e4a; transform: translateX(-50%) rotate(0deg); }
+.leaf-shape.mood-ok .face-mouth { border-color: #9333ea; width: calc(var(--face-size) * 0.38); border-bottom-width: calc(var(--face-size) * 0.04); }
+.leaf-shape.mood-thirsty .face-mouth { border-color: #be123c; width: calc(var(--face-size) * 0.32); border-bottom-width: calc(var(--face-size) * 0.035); transform: translateX(-50%) rotate(6deg); }
+.leaf-shape.mood-sad .face-mouth {
+  border-bottom: none;
+  border-top: calc(var(--face-size) * 0.05) solid #0f172a;
+  width: calc(var(--face-size) * 0.46);
+  height: calc(var(--face-size) * 0.08);
+  border-radius: 50px 50px 0 0;
+  transform: translateX(-50%) rotate(0deg);
+}
+
+/* small shadow highlight to match circular face-shell highlight */
+.leaf-shape::after {
+  content: "";
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  width: 36%;
+  height: 36%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.24);
+  filter: blur(6px);
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
 /* In detail modal override we set a larger --face-size inline */
 .plant-detail-wrapper { --face-size: var(--face-size-medium); }
 
@@ -918,4 +1017,111 @@ dialog.plant-detail-modal::backdrop {
   .watering-card { padding: 14px; gap: 10px; }
   .watering-can { width: 64px; height: 64px; flex: 0 0 64px; }
   .watering-progress { height: 10px; }
+}
+
+/* ---------------------------
+   Face personality animations
+   --------------------------- */
+
+/* Bob / float */
+@keyframes faceBob {
+  0%   { transform: translateY(0) rotate(0.0deg); }
+  50%  { transform: translateY(-6px) rotate(-0.6deg); }
+  100% { transform: translateY(0) rotate(0.0deg); }
+}
+
+/* Gentle breathe (scale) */
+@keyframes faceBreathe {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+
+/* Blink — scales eyes vertically to simulate blink */
+@keyframes eyeBlink {
+  0%, 8%   { transform: scaleY(1); }
+  10%, 18% { transform: scaleY(0.06); }
+  20%,100% { transform: scaleY(1); }
+}
+
+/* Peek — slight horizontal look/tilt */
+@keyframes facePeek {
+  0%   { transform: translateX(0) rotate(0deg); }
+  40%  { transform: translateX(3px) rotate(1.2deg); }
+  70%  { transform: translateX(-2px) rotate(-0.8deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+
+/* Sprout sway */
+@keyframes sproutSway {
+  0%   { transform: translateX(-50%) rotate(-3deg); }
+  50%  { transform: translateX(-50%) rotate(6deg); }
+  100% { transform: translateX(-50%) rotate(-3deg); }
+}
+
+/* Utility classes applied dynamically by JS */
+.face-shell.idle-bob {
+  animation: faceBob var(--bob-dur, 4200ms) ease-in-out infinite;
+  transform-origin: center;
+}
+
+.face-shell.idle-breathe {
+  animation: faceBreathe var(--breathe-dur, 4200ms) ease-in-out infinite;
+  animation-delay: var(--breathe-delay, 0s);
+  transform-origin: center;
+}
+
+/* Blink applied per-eye (safer than scaling the whole container) */
+.face-eye.idle-blink {
+  display: inline-block;                /* ensure transform applies to each eye cleanly */
+  transform-origin: center center;
+  animation: eyeBlink var(--blink-dur, 3200ms) steps(1) infinite;
+  animation-delay: var(--blink-delay, 800ms);
+}
+
+/* occasional peek for a little personality; short bursts */
+.face-shell.idle-peek {
+  animation: facePeek var(--peek-dur, 3400ms) ease-in-out infinite;
+  animation-delay: var(--peek-delay, 1.1s);
+}
+
+/* small sprout decoration on some smiley plants */
+.face-sprout {
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(var(--face-size) * 0.28);
+  height: calc(var(--face-size) * 0.28);
+  pointer-events: none;
+  z-index: 1;
+  transform-origin: bottom center;
+  animation: sproutSway var(--sprout-dur, 3600ms) ease-in-out infinite;
+  filter: drop-shadow(0 6px 8px rgba(0,0,0,0.06));
+  opacity: 0.98;
+}
+
+/* tiny sparkle occasionally appear near the top-left of the face */
+.face-sparkle {
+  position: absolute;
+  left: 18%;
+  top: 8%;
+  width: calc(var(--face-size) * 0.12);
+  height: calc(var(--face-size) * 0.12);
+  pointer-events: none;
+  opacity: 0.0;
+  transform: scale(0.85) rotate(8deg);
+  transition: opacity 200ms ease, transform 300ms ease;
+}
+.face-shell.sparkle-on .face-sparkle {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+/* keep animations cheap on mobile by reducing movement */
+@media (max-width: 520px) {
+  .face-shell.idle-bob { animation-duration: 4800ms; }
+  .face-shell.idle-breathe { animation-duration: 4800ms; }
+  .face-shell.idle-peek { animation-duration: 4200ms; }
+  .face-sprout { animation-duration: 4200ms; }
 }
