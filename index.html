@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plant Health</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header>
+      <div>
+        <h1>Plant Health</h1>
+        <p>Grow cute plants, water them, and watch their mood change over time.</p>
+      </div>
+    </header>
+
+    <section class="create-panel card">
+      <h2>Create a new plant</h2>
+      <form id="plant-form">
+        <div class="field-row">
+          <label for="plant-name">Plant name</label>
+          <input id="plant-name" type="text" placeholder="Sunny" required maxlength="20" />
+        </div>
+        <div class="field-row">
+          <label for="water-interval">Water every</label>
+          <div class="interval-inputs">
+            <input id="water-interval" type="number" min="1" value="8" required />
+            <span>hours</span>
+          </div>
+        </div>
+        <div class="field-row">
+          <label for="face-color">Face color</label>
+          <input id="face-color" type="color" value="#b1e07c" />
+        </div>
+        <div class="field-row">
+          <label for="bg-color">Background</label>
+          <input id="bg-color" type="color" value="#f7f3d8" />
+        </div>
+        <button class="primary-button" type="submit">Add Plant</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Your plants</h2>
+      <div id="plant-list" class="plant-list"></div>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
