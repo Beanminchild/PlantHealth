@@ -167,86 +167,332 @@ function formatTimeRemaining(lastWatered, intervalHours) {
   return `${Math.round(remaining)} hours`;
 }
 
-function openPlantDetail(plant) {
-  const mood = getPlantMood(plant.lastWatered, plant.intervalHours);
-  const timeRemaining = formatTimeRemaining(plant.lastWatered, plant.intervalHours);
-  const elapsed = (Date.now() - plant.lastWatered) / (1000 * 60 * 60);
-  const healthPercent = Math.max(0, Math.min(100, ((plant.intervalHours - elapsed) / plant.intervalHours) * 100));
+// helper used by the detail view
+function formatDurationSeconds(seconds) {
+  if (seconds <= 0) return 'NOW';
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) return `${hrs}h ${String(mins).padStart(2, '0')}m`;
+  if (mins > 0) return `${mins}m ${String(secs).padStart(2, '0')}s`;
+  return `${secs}s`;
+}
 
-  const html = `
-    <div class="plant-detail-wrapper" style="background-color: ${plant.bgColor};">
-      <button type="button" class="detail-close-btn" id="detail-close">&times;</button>
+function getHealthBarColor(percent) {
+  if (percent >= 80) return '#10b981'; // green
+  if (percent >= 60) return '#84cc16';
+  if (percent >= 40) return '#f59e0b';
+  if (percent >= 20) return '#f97316';
+  return '#ef4444';
+}
 
-      <div class="plant-detail-face">
-        <div class="face-shell" style="background: ${plant.faceColor};">
-          <div class="face-eyes">
-            <span class="face-eye"></span>
-            <span class="face-eye"></span>
-          </div>
-          <span class="face-mouth"></span>
+// Watering animation modal + jingle
+let __wateringOverlayActive = false;
+
+/**
+ * showWateringAnimation(plantId)
+ * - plantId: id string of plant to water (must exist in storage)
+ *
+ * Behavior:
+ * - calculates previous health %
+ * - sets lastWatered = Date.now() and saves immediately
+ * - shows overlay with watering can + animated progress fill from prev -> 100%
+ * - plays short jingle via WebAudio
+ * - cleans up and calls renderPlants() when done
+ */
+function showWateringAnimation(plantId) {
+  if (__wateringOverlayActive) return; // single instance guard
+  const plants = loadPlants();
+  const idx = plants.findIndex(p => p.id === plantId);
+  if (idx === -1) return;
+  const plant = plants[idx];
+
+  // compute previous percent (0..100)
+  const now = Date.now();
+  const elapsedHoursPrev = (now - plant.lastWatered) / (1000 * 60 * 60);
+  const prevPercent = Math.max(0, Math.min(100, ((plant.intervalHours - elapsedHoursPrev) / plant.intervalHours) * 100));
+
+  // update model immediately so other UI sees water happened
+  plants[idx].lastWatered = Date.now();
+  savePlants(plants);
+
+  // create overlay
+  __wateringOverlayActive = true;
+  const overlay = document.createElement('div');
+  overlay.className = 'watering-overlay';
+  overlay.innerHTML = `
+    <div class="watering-card" role="dialog" aria-live="polite">
+      <div class="watering-visual">
+        <div class="watering-can" aria-hidden="true">
+          <svg class="can" viewBox="0 0 64 64" width="56" height="56" xmlns="http://www.w3.org/2000/svg" fill="none">
+            <rect x="6" y="22" width="36" height="24" rx="4" fill="#374151"/>
+            <path d="M42 26c5 0 12-2 16-8 0 0-4 16-16 16v-8z" fill="#4b5563"/>
+            <rect x="40" y="10" width="18" height="6" rx="3" fill="#374151"/>
+          </svg>
+          <span class="watering-drop"></span>
+          <span class="watering-drop drop2"></span>
+          <span class="watering-drop drop3"></span>
+        </div>
+
+        <div style="display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
+          <div style="font-weight:800; font-size:1rem; color:#0f172a">Watering...</div>
+          <div style="font-size:0.9rem; color:#475569">Giving it a drink — nice!</div>
         </div>
       </div>
 
-      <h2 class="plant-detail-name">${plant.name}</h2>
-
-      <div class="plant-detail-info">
-        <div class="detail-stat">
-          <span class="detail-label">Mood</span>
-          <span class="detail-value">${getMoodLabel(mood)}</span>
+      <div style="display:flex; flex-direction:column; flex:1; margin-left:12px;">
+        <div class="watering-progress" aria-hidden="true">
+          <div class="watering-progress-fill" id="watering-progress-fill" style="width:${prevPercent}%"></div>
         </div>
-
-        <div class="detail-stat">
-          <span class="detail-label">Time Until Watering</span>
-          <span class="detail-value">${timeRemaining}</span>
-        </div>
-
-        <div class="detail-stat">
-          <span class="detail-label">Water Interval</span>
-          <span class="detail-value">${plant.intervalHours} hour${plant.intervalHours === 1 ? '' : 's'}</span>
-        </div>
-
-        <div class="health-bar-container">
-          <span class="detail-label">Plant Health</span>
-          <div class="health-bar">
-            <div class="health-bar-fill" style="width: ${healthPercent}%; background-color: ${getHealthBarColor(healthPercent)};"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+          <div style="font-size:0.9rem; color:#334155">Health</div>
+          <div style="display:flex; align-items:center;">
+            <div class="watering-check" id="watering-check">✓</div>
           </div>
-          <span class="health-percentage">${Math.round(healthPercent)}%</span>
         </div>
       </div>
-
-      <button type="button" class="water-button detail-water-btn" id="detail-water-btn">
-        Water Plant
-      </button>
     </div>
   `;
 
-  detailContent.innerHTML = html;
+  document.body.appendChild(overlay);
+
+  // animate progress fill from prevPercent -> 100
+  const fillEl = overlay.querySelector('#watering-progress-fill');
+  const checkEl = overlay.querySelector('#watering-check');
+
+  // small jingle
+  playWateringJingle();
+
+  // animate: wait tiny bit then set to 100% (CSS transition takes care)
+  requestAnimationFrame(() => {
+    // two frames to ensure transition triggers reliably
+    requestAnimationFrame(() => {
+      fillEl.style.width = '100%';
+    });
+  });
+
+  // show check after animation
+  const ANIM_DURATION = 1400; // ms, matches CSS timing / feel
+  setTimeout(() => {
+    checkEl.classList.add('show');
+  }, ANIM_DURATION - 250);
+
+  // after animation ends, fade out overlay and cleanup
+  setTimeout(() => {
+    overlay.style.transition = 'opacity 260ms ease, transform 260ms ease';
+    overlay.style.opacity = '0';
+    overlay.style.transform = 'scale(0.995)';
+    setTimeout(() => {
+      try { document.body.removeChild(overlay); } catch(e) {}
+      __wateringOverlayActive = false;
+      renderPlants(); // ensure UI shows refreshed state
+    }, 260);
+  }, ANIM_DURATION + 420);
+}
+
+/**
+ * playWateringJingle()
+ * - plays a small, pleasant jingle using Web Audio API
+ * - no external files required
+ */
+function playWateringJingle() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+
+    // short chord arpeggio
+    function playNote(freq, when, dur, type='sine') {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = 0;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(0.12, when + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.start(when);
+      o.stop(when + dur + 0.02);
+    }
+
+    // simple pleasant frequencies (major-ish)
+    const base = 440; // A4
+    playNote(base * 0.75, now + 0.0, 0.42, 'sine'); // slightly lower
+    playNote(base * 1.0, now + 0.12, 0.48, 'triangle');
+    playNote(base * 1.5, now + 0.26, 0.42, 'sine');
+
+    // small bell enhancement using noise-ish oscillator
+    const bell = ctx.createOscillator();
+    const bellGain = ctx.createGain();
+    bell.type = 'triangle';
+    bell.frequency.value = base * 2.0;
+    bellGain.gain.value = 0;
+    bell.connect(bellGain);
+    bellGain.connect(ctx.destination);
+    bellGain.gain.setValueAtTime(0.0001, now);
+    bellGain.gain.linearRampToValueAtTime(0.08, now + 0.05);
+    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    bell.start(now);
+    bell.stop(now + 0.9);
+
+    // close the audio context after a second to release resources
+    setTimeout(() => {
+      try { ctx.close(); } catch(e) {}
+    }, 1200);
+  } catch (e) {
+    // web audio not supported — ignore silently
+    console.warn('Audio not available:', e && e.message);
+  }
+}
+
+function openPlantDetail(plant) {
+  const detailModal = document.getElementById('plant-detail-modal');
+  const detailContent = document.getElementById('plant-detail-content');
+
+  // compute values (seconds precision)
+  const now = Date.now();
+  const elapsedHours = (now - plant.lastWatered) / (1000 * 60 * 60);
+  const remainingHours = Math.max(0, plant.intervalHours - elapsedHours);
+  const remainingSeconds = Math.max(0, Math.round(remainingHours * 3600));
+  const healthPercent = Math.max(0, Math.min(100, ((plant.intervalHours - elapsedHours) / plant.intervalHours) * 100));
+
+  // build the card HTML (the wrapper background is the plant bg color)
+  detailContent.innerHTML = `
+    <div class="plant-detail-wrapper" style="background: ${plant.bgColor}; color: ${getForegroundFromBg(plant.bgColor)};">
+      <button type="button" class="detail-close-btn" id="detail-close">&times;</button>
+
+      <div class="plant-detail-scroll">
+        <div class="plant-detail-face">
+          <div class="face-shell" style="background: ${plant.faceColor};">
+            <div class="face-eyes">
+              <span class="face-eye"></span>
+              <span class="face-eye"></span>
+            </div>
+            <span class="face-mouth"></span>
+          </div>
+        </div>
+
+        <h2 class="plant-detail-name">${plant.name}</h2>
+
+        <div class="plant-detail-info">
+          <div class="detail-stat">
+            <div class="detail-label">Mood</div>
+            <div class="detail-value">${getMoodLabel(getPlantMood(plant.lastWatered, plant.intervalHours))}</div>
+          </div>
+
+          <div class="detail-stat">
+            <div class="detail-label">Time Until Watering</div>
+            <div class="detail-value" id="detail-time-remaining">${formatDurationSeconds(remainingSeconds)}</div>
+          </div>
+
+          <div class="detail-stat">
+            <div class="detail-label">Water Interval</div>
+            <div class="detail-value">${plant.intervalHours} hour${plant.intervalHours === 1 ? '' : 's'}</div>
+          </div>
+
+          <div class="health-bar-container">
+            <div class="health-row">
+              <div class="detail-label">Plant Health</div>
+              <div class="health-percentage" id="detail-health-percent">${Math.round(healthPercent)}%</div>
+            </div>
+            <div class="health-bar">
+              <div class="health-bar-fill" id="detail-health-fill" style="width: ${healthPercent}%; background: ${getHealthBarColor(healthPercent)}"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="water-button detail-water-btn" id="detail-water-btn">Water Plant</button>
+    </div>
+  `;
+
+  // open modal
   detailModal.showModal();
 
-  // Close button handler
-  document.getElementById('detail-close').addEventListener('click', () => {
-    detailModal.close();
-  });
-
-  // Water button handler
-  document.getElementById('detail-water-btn').addEventListener('click', () => {
-    plant.lastWatered = Date.now();
-    const plants = loadPlants();
-    const index = plants.findIndex(p => p.id === plant.id);
-    if (index !== -1) {
-      plants[index] = plant;
-      savePlants(plants);
+  // update function runs every second to keep time + bar in sync
+  let tickId = null;
+  function tick() {
+    const now = Date.now();
+    const elapsedHours = (now - plant.lastWatered) / (1000 * 60 * 60);
+    const remaining = Math.max(0, plant.intervalHours - elapsedHours);
+    const remainingSeconds = Math.max(0, Math.round(remaining * 3600));
+    const percent = Math.max(0, Math.min(100, (remaining / plant.intervalHours) * 100));
+    const fill = document.getElementById('detail-health-fill');
+    const percentText = document.getElementById('detail-health-percent');
+    const timeText = document.getElementById('detail-time-remaining');
+    if (fill) {
+      fill.style.width = `${percent}%`;
+      fill.style.background = getHealthBarColor(percent);
     }
-    detailModal.close();
-    renderPlants();
-  });
+    if (percentText) percentText.textContent = `${Math.round(percent)}%`;
+    if (timeText) timeText.textContent = formatDurationSeconds(remainingSeconds);
+  }
 
-  // Close when clicking outside
-  detailModal.addEventListener('click', (e) => {
+  // small utility to compute readable foreground color for text (black/white) given a background hex
+  function getForegroundFromBg(hex) {
+    // if hex like "#aabbcc" -> parse r,g,b
+    try {
+      const h = hex.replace('#','');
+      const r = parseInt(h.substring(0,2),16);
+      const g = parseInt(h.substring(2,4),16);
+      const b = parseInt(h.substring(4,6),16);
+      // luminance formula
+      const luminance = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+      return luminance > 0.6 ? '#0f172a' : '#ffffff';
+    } catch (e) {
+      return '#0f172a';
+    }
+  }
+
+  // start ticking
+  tickId = setInterval(tick, 1000); // every second
+  tick(); // immediate update
+
+  // close handlers (clean up interval)
+  document.getElementById('detail-close').addEventListener('click', () => {
+    if (tickId) clearInterval(tickId);
+    detailModal.close();
+  }, { once: true });
+
+  // click outside to close: we attach once so it won't pile up
+  detailModal.addEventListener('click', function onBackdrop(e) {
     if (e.target === detailModal) {
+      if (tickId) clearInterval(tickId);
       detailModal.close();
     }
-  });
+  }, { once: true });
+
+  // also ensure we clear on native 'close' event
+  detailModal.addEventListener('close', () => {
+    if (tickId) clearInterval(tickId);
+  }, { once: true });
+
+  document.getElementById('detail-water-btn').addEventListener('click', () => {
+  // stop the detail view updater
+  if (typeof tickId !== 'undefined' && tickId) {
+    clearInterval(tickId);
+    tickId = null;
+  }
+
+  // close the detail modal so the overlay can appear on top
+  detailModal.close();
+
+  // small delay to allow the dialog to finish closing / remove stacking context
+  // 100–160ms is usually enough; adjust if you have animations on the dialog
+  setTimeout(() => {
+    showWateringAnimation(plant.id);
+  }, 140);
+
+ setTimeout(() => {
+    detailModal.showModal(plant.id);
+  }, 3040);
+
+
+}, { once: true });
+
+
 }
 // Update createPlantCard to add click handler to face
 function createPlantCard(plant, updatePlants) {
@@ -296,11 +542,9 @@ function createPlantCard(plant, updatePlants) {
   button.type = 'button';
   button.className = 'water-button';
   button.textContent = 'Water plant';
-  button.addEventListener('click', () => {
-    plant.lastWatered = Date.now();
-    savePlants(updatePlants());
-    renderPlants();
-  });
+ button.addEventListener('click', () => {
+  showWateringAnimation(plant.id);
+});
 
   card.appendChild(meta);
   card.appendChild(faceWrapper);
