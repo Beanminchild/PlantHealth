@@ -299,7 +299,7 @@ function showWateringAnimation(plantId) {
  */
 function playWateringJingle() {
 
-    try {
+  try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const ctx = new AudioContext();
     const now = ctx.currentTime;
@@ -744,4 +744,16 @@ function sendSlackNotification(message, webhook) {
     });
 }
 
+document.getElementById('face-color').addEventListener('input', (e) => {
+  document.getElementById('face-swatch').style.backgroundColor = e.target.value;
+});
 
+document.getElementById('bg-color').addEventListener('input', (e) => {
+  document.getElementById('bg-swatch').style.backgroundColor = e.target.value;
+});
+
+
+
+
+
+window.addEventListener('load', renderPlants);
