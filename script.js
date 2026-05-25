@@ -129,7 +129,7 @@ plantModal.addEventListener('click', (e) => {
 plantForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const name = document.getElementById('plant-name').value.trim() || 'Plant';
-  const interval = Math.max(1, Number(document.getElementById('water-interval').value) + Number(document.getElementById('water-interval-days').value * 24));
+  const interval = Math.max(0, Number(document.getElementById('water-interval').value) + Number(document.getElementById('water-interval-days').value * 24));
   console.log(interval)
   const faceColor = document.getElementById('face-color').value;
   const bgColor = document.getElementById('bg-color').value;
