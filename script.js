@@ -298,8 +298,8 @@ function showWateringAnimation(plantId) {
  * - no external files required
  */
 function playWateringJingle() {
-  sendSlackNotification('Does this still work?', 'https://hooks.slack.com/triggers/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')
-  try {
+
+    try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const ctx = new AudioContext();
     const now = ctx.currentTime;
@@ -745,25 +745,3 @@ function sendSlackNotification(message, webhook) {
 }
 
 
-
-// Simple local notifications every 10 seconds
-function startNotifications() {
-  setInterval(() => {
-    if (Notification.permission === 'granted') {
-      new Notification('App Notification', {
-        body: 'This is a local notification',
-        icon: '/icon.png'
-      });
-    }
-  }, 10000);
-}
-
-// Request permission and start
-Notification.requestPermission().then(permission => {
-  if (permission === 'granted') {
-    startNotifications();
-  }
-});
-
-
-window.addEventListener('load', renderPlants);
