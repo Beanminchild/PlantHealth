@@ -129,7 +129,8 @@ plantModal.addEventListener('click', (e) => {
 plantForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const name = document.getElementById('plant-name').value.trim() || 'Plant';
-  const interval = Math.max(1, Number(document.getElementById('water-interval').value));
+  const interval = Math.max(1, Number(document.getElementById('water-interval').value) + Number(document.getElementById('water-interval-days').value * 24));
+  console.log(interval)
   const faceColor = document.getElementById('face-color').value;
   const bgColor = document.getElementById('bg-color').value;
 
@@ -237,7 +238,7 @@ function showWateringAnimation(plantId) {
 
         <div style="display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
           <div style="font-weight:800; font-size:1rem; color:#0f172a">Watering...</div>
-          <div style="font-size:0.9rem; color:#475569">Giving it a drink — nice!</div>
+          <div style="font-size:0.9rem; color:#475569">ahhhh much better.</div>
         </div>
       </div>
 
@@ -297,6 +298,7 @@ function showWateringAnimation(plantId) {
  * - no external files required
  */
 function playWateringJingle() {
+  sendSlackNotification('Does this still work?', 'https://hooks.slack.com/triggers/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')
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const ctx = new AudioContext();
@@ -404,9 +406,10 @@ function openPlantDetail(plant) {
             </div>
           </div>
         </div>
+              <button type="button" class="water-button detail-water-btn" id="detail-water-btn">I watered the lil guy!!</button>
       </div>
 
-      <button type="button" class="water-button detail-water-btn" id="detail-water-btn">Water Plant</button>
+
     </div>
   `;
 
@@ -553,7 +556,7 @@ function createPlantCard(plant, updatePlants) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'water-button';
-  button.textContent = 'Water plant';
+  button.textContent = 'Plant has been watered';
  button.addEventListener('click', () => {
   showWateringAnimation(plant.id);
 });
@@ -717,5 +720,50 @@ function getHealthBarColor(percent) {
   if (percent >= 20) return '#f97316'; // Orange - urgent
   return '#ef4444'; // Red - critical
 }
+
+function sendSlackNotification(message, webhook) {
+    const payload = {
+        remote_console_log: message
+    };
+
+    fetch(webhook, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .catch(error => {
+        console.error('Error sending Slack notification:', error);
+    });
+}
+
+
+
+// Simple local notifications every 10 seconds
+function startNotifications() {
+  setInterval(() => {
+    if (Notification.permission === 'granted') {
+      new Notification('App Notification', {
+        body: 'This is a local notification',
+        icon: '/icon.png'
+      });
+    }
+  }, 10000);
+}
+
+// Request permission and start
+Notification.requestPermission().then(permission => {
+  if (permission === 'granted') {
+    startNotifications();
+  }
+});
+
 
 window.addEventListener('load', renderPlants);
